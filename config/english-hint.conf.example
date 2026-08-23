@@ -1,0 +1,13 @@
+[General]
+Enabled=True
+DebounceMs=200
+TimeoutMs=2500
+CacheSize=4096
+MaxBatch=5
+Debug=False
+
+[LLM]
+Endpoint=http://127.0.0.1:8080/v1/chat/completions
+Model=qwen3.8-27b
+ApiKey=
+MaxTokens=32

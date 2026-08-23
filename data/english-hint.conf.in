@@ -1,0 +1,12 @@
+[Addon]
+Name=English Hint
+Category=Module
+Version=@PROJECT_VERSION@
+Enabled=True
+Library=libenglish-hint
+Type=SharedLibrary
+OnDemand=False
+Configurable=True
+
+[Addon/Dependencies]
+0=core:@REQUIRED_FCITX_VERSION@
