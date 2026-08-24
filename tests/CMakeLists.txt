@@ -22,3 +22,14 @@ target_compile_features(english-hint-cache-smoke PRIVATE cxx_std_17)
 
 add_test(NAME english-hint-cache-smoke
          COMMAND english-hint-cache-smoke)
+
+add_executable(english-hint-aux-formatter-smoke
+    aux_formatter_smoke.cpp
+    ../src/aux_formatter.cpp
+)
+
+target_include_directories(english-hint-aux-formatter-smoke PRIVATE ../src)
+target_compile_features(english-hint-aux-formatter-smoke PRIVATE cxx_std_17)
+
+add_test(NAME english-hint-aux-formatter-smoke
+         COMMAND english-hint-aux-formatter-smoke)

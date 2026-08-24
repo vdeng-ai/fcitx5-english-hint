@@ -1,4 +1,5 @@
 #include "addon.h"
+#include "aux_formatter.h"
 #include "local_dictionary.h"
 
 #include <fcitx-utils/capabilityflags.h>
@@ -7,13 +8,16 @@
 #include <fcitx/addonfactory.h>
 #include <fcitx/addonmanager.h>
 #include <fcitx/candidatelist.h>
+#include <fcitx/event.h>
 #include <fcitx/inputcontext.h>
 #include <fcitx/inputmethodentry.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/userinterface.h>
 
+#include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace fcitx::english_hint {
 
@@ -26,19 +30,34 @@ EnglishHint::EnglishHint(Instance *instance)
     loadEnglishHintConfig(uiConfig_);
     config_ = toRuntimeConfig(uiConfig_);
     cache_.setCapacity(config_.cacheSize);
+
     const auto persisted = persistentCache_.load();
     for (const auto &[source, translation] : persisted) {
         cache_.put(source, translation);
     }
     applyRuntimeConfig();
 
-    outputFilterConnection_ = instance_->connect<Instance::OutputFilter>(
-        [this](InputContext *inputContext, Text &text) {
-            filterOutput(inputContext, text);
+    updateUIWatcher_ = instance_->watchEvent(
+        EventType::InputContextUpdateUI, EventWatcherPhase::PostInputMethod,
+        [this](Event &event) {
+            auto &uiEvent = static_cast<InputContextUpdateUIEvent &>(event);
+            if (uiEvent.component() != UserInterfaceComponent::InputPanel) {
+                return;
+            }
+            handleInputPanelUpdate(uiEvent.inputContext());
+        });
+
+    destroyedWatcher_ = instance_->watchEvent(
+        EventType::InputContextDestroyed, EventWatcherPhase::PostInputMethod,
+        [this](Event &event) {
+            auto &contextEvent = static_cast<InputContextEvent &>(event);
+            ownedAuxDown_.erase(contextEvent.inputContext());
         });
 }
 
 EnglishHint::~EnglishHint() {
+    destroyedWatcher_.reset();
+    updateUIWatcher_.reset();
     worker_.reset();
     dispatcher_.detach();
 }
@@ -64,6 +83,7 @@ void EnglishHint::applyRuntimeConfig() {
 void EnglishHint::reloadConfig() {
     loadEnglishHintConfig(uiConfig_);
     applyRuntimeConfig();
+    refreshCurrentInputPanel();
 }
 
 const Configuration *EnglishHint::getConfig() const { return &uiConfig_; }
@@ -74,11 +94,11 @@ void EnglishHint::setConfig(const RawConfig &config) {
         FCITX_WARN() << "Failed to save english-hint configuration";
     }
     applyRuntimeConfig();
+    refreshCurrentInputPanel();
 }
 
-bool EnglishHint::isRimeCandidateText(InputContext *inputContext,
-                                      const Text &text) const {
-    if (!inputContext || text.empty()) {
+bool EnglishHint::isEligibleContext(InputContext *inputContext) const {
+    if (!config_.enabled || !worker_ || !inputContext) {
         return false;
     }
 
@@ -88,28 +108,7 @@ bool EnglishHint::isRimeCandidateText(InputContext *inputContext,
     }
 
     const auto *entry = instance_->inputMethodEntry(inputContext);
-    if (!entry || entry->addon() != "rime") {
-        return false;
-    }
-
-    const auto &panel = inputContext->inputPanel();
-    const auto candidateList = panel.candidateList();
-    if (!candidateList || candidateList->empty()) {
-        return false;
-    }
-
-    const std::string rendered = text.toString();
-    for (int i = 0; i < candidateList->size(); ++i) {
-        const auto &candidate = candidateList->candidate(i);
-        if (candidate.isPlaceHolder()) {
-            continue;
-        }
-        if (candidate.text().toString() == rendered) {
-            return true;
-        }
-    }
-
-    return false;
+    return entry && entry->addon() == "rime";
 }
 
 bool EnglishHint::containsHan(const std::string &text) const {
@@ -146,71 +145,104 @@ bool EnglishHint::shouldTranslate(const std::string &text) const {
            text.find('\r') == std::string::npos;
 }
 
-std::vector<std::string>
-EnglishHint::collectMissingCandidates(InputContext *inputContext) {
-    std::vector<std::string> missing;
+void EnglishHint::clearOwnedAuxDown(InputContext *inputContext) {
     if (!inputContext) {
-        return missing;
+        return;
     }
 
-    const auto candidateList = inputContext->inputPanel().candidateList();
-    if (!candidateList) {
-        return missing;
+    const auto owned = ownedAuxDown_.find(inputContext);
+    if (owned == ownedAuxDown_.end()) {
+        return;
     }
 
-    missing.reserve(config_.maxBatch);
-    for (int i = 0; i < candidateList->size() &&
-                    missing.size() < config_.maxBatch;
-         ++i) {
-        const auto &candidate = candidateList->candidate(i);
+    auto &panel = inputContext->inputPanel();
+    if (panel.auxDown().toString() == owned->second) {
+        panel.setAuxDown(Text{});
+    }
+    ownedAuxDown_.erase(owned);
+}
+
+void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
+    if (!inputContext) {
+        return;
+    }
+
+    auto &panel = inputContext->inputPanel();
+    const auto owned = ownedAuxDown_.find(inputContext);
+    const std::string currentAux = panel.auxDown().toString();
+
+    // Never overwrite auxDown content owned by Rime or another addon. We only
+    // take ownership when it is empty or still contains our previous line.
+    const bool ownsCurrent =
+        owned != ownedAuxDown_.end() && currentAux == owned->second;
+    if (!currentAux.empty() && !ownsCurrent) {
+        ownedAuxDown_.erase(inputContext);
+        return;
+    }
+
+    if (!isEligibleContext(inputContext)) {
+        clearOwnedAuxDown(inputContext);
+        return;
+    }
+
+    const auto candidateList = panel.candidateList();
+    if (!candidateList || candidateList->empty()) {
+        clearOwnedAuxDown(inputContext);
+        return;
+    }
+
+    const std::size_t visibleCount = std::min<std::size_t>(
+        config_.maxBatch, static_cast<std::size_t>(candidateList->size()));
+    std::vector<std::string> missing;
+    std::vector<std::pair<std::string, std::string>> translated;
+    missing.reserve(visibleCount);
+    translated.reserve(visibleCount);
+
+    for (std::size_t i = 0; i < visibleCount; ++i) {
+        const auto &candidate = candidateList->candidate(static_cast<int>(i));
         if (candidate.isPlaceHolder()) {
             continue;
         }
 
-        const std::string value = candidate.text().toString();
-        if (!shouldTranslate(value)) {
+        const std::string source = candidate.text().toString();
+        if (!shouldTranslate(source)) {
             continue;
         }
 
-        std::string cached;
-        if (cache_.get(value, cached)) {
-            continue;
+        std::string translation;
+        if (!cache_.get(source, translation)) {
+            if (lookupLocalDictionary(source, translation)) {
+                cache_.put(source, translation);
+            } else {
+                missing.push_back(source);
+                continue;
+            }
         }
 
-        if (lookupLocalDictionary(value, cached)) {
-            cache_.put(value, cached);
-            continue;
+        std::string label =
+            candidateList->label(static_cast<int>(i)).toString();
+        if (label.empty()) {
+            label = std::to_string(i + 1);
         }
-        missing.push_back(value);
-    }
-    return missing;
-}
-
-void EnglishHint::filterOutput(InputContext *inputContext, Text &text) {
-    if (!config_.enabled || !worker_ ||
-        !isRimeCandidateText(inputContext, text)) {
-        return;
+        translated.emplace_back(std::move(label), std::move(translation));
     }
 
-    const std::string candidate = text.toString();
-    if (!shouldTranslate(candidate)) {
-        return;
+    const std::string auxLine = formatAuxTranslations(translated);
+    if (auxLine.empty()) {
+        clearOwnedAuxDown(inputContext);
+    } else {
+        if (currentAux != auxLine) {
+            panel.setAuxDown(Text(auxLine));
+        }
+        ownedAuxDown_[inputContext] = auxLine;
     }
 
-    std::string translation;
-    if (cache_.get(candidate, translation)) {
-        text.append(" [" + translation + "]");
-        return;
+    // Show any cached/dictionary translations immediately, even when some
+    // candidates still need the LLM. Missing entries keep their original
+    // candidate labels, so the partial aux line remains unambiguous.
+    if (!missing.empty()) {
+        worker_->submit(std::move(missing));
     }
-
-    if (lookupLocalDictionary(candidate, translation)) {
-        cache_.put(candidate, translation);
-        text.append(" [" + translation + "]");
-        worker_->submit(collectMissingCandidates(inputContext));
-        return;
-    }
-
-    worker_->submit(collectMissingCandidates(inputContext));
 }
 
 void EnglishHint::refreshCurrentInputPanel() {
@@ -219,11 +251,12 @@ void EnglishHint::refreshCurrentInputPanel() {
         return;
     }
 
-    const auto *entry = instance_->inputMethodEntry(inputContext);
-    if (!entry || entry->addon() != "rime") {
-        return;
-    }
-
+    // Worker completion arrives on the Fcitx main loop through EventDispatcher.
+    // Rebuild auxDown explicitly before asking the UI to repaint. Relying only
+    // on an InputContextUpdateUI watcher is insufficient on some UI paths: the
+    // repaint may happen without our watcher rebuilding the panel first, which
+    // makes fresh translations appear only on the next key event.
+    handleInputPanelUpdate(inputContext);
     inputContext->updateUserInterface(UserInterfaceComponent::InputPanel, true);
 }
 

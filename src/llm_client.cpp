@@ -152,16 +152,15 @@ std::optional<std::string> parseJsonString(const std::string &json,
     return std::nullopt;
 }
 
-std::optional<std::string> extractAssistantContent(const std::string &json) {
-    size_t pos = json.find("\"message\"");
+std::optional<std::string> extractJsonStringField(const std::string &json,
+                                                  std::string_view field,
+                                                  size_t start = 0) {
+    const std::string needle = "\"" + std::string(field) + "\"";
+    size_t pos = json.find(needle, start);
     if (pos == std::string::npos) {
         return std::nullopt;
     }
-    pos = json.find("\"content\"", pos);
-    if (pos == std::string::npos) {
-        return std::nullopt;
-    }
-    pos = json.find(':', pos);
+    pos = json.find(':', pos + needle.size());
     if (pos == std::string::npos) {
         return std::nullopt;
     }
@@ -171,6 +170,19 @@ std::optional<std::string> extractAssistantContent(const std::string &json) {
         ++pos;
     }
     return parseJsonString(json, pos);
+}
+
+std::optional<std::string> extractAssistantContent(const std::string &json) {
+    size_t pos = json.find("\"message\"");
+    if (pos == std::string::npos) {
+        return std::nullopt;
+    }
+    return extractJsonStringField(json, "content", pos);
+}
+
+bool completionWasTruncated(const std::string &json) {
+    const auto reason = extractJsonStringField(json, "finish_reason");
+    return reason && *reason == "length";
 }
 
 std::string trim(std::string value) {
@@ -368,7 +380,20 @@ LlmClient::translate(const std::vector<std::string> &candidates) {
     if (!content) {
         return empty;
     }
-    return parseTranslations(*content, candidates.size());
+
+    auto translations = parseTranslations(*content, candidates.size());
+    if (completionWasTruncated(response)) {
+        // The final line is the one most likely to be cut mid-sentence. Never
+        // cache it as a valid translation; earlier complete lines remain useful
+        // and the missing candidate will be retried by the worker/UI pipeline.
+        for (auto it = translations.rbegin(); it != translations.rend(); ++it) {
+            if (!it->empty()) {
+                it->clear();
+                break;
+            }
+        }
+    }
+    return translations;
 }
 
 } // namespace fcitx::english_hint

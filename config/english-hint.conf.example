@@ -10,4 +10,4 @@ Debug=False
 Endpoint=http://127.0.0.1:8080/v1/chat/completions
 Model=qwen3.8-27b
 ApiKey=
-MaxTokens=32
+MaxTokens=96

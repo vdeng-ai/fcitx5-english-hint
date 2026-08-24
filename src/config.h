@@ -16,7 +16,7 @@ struct EnglishHintConfig {
     std::string apiKey;
     int debounceMs = 200;
     int timeoutMs = 2500;
-    int maxTokens = 32;
+    int maxTokens = 96;
     std::size_t cacheSize = 4096;
     std::size_t maxBatch = 5;
     bool debug = false;
@@ -47,7 +47,7 @@ FCITX_CONFIGURATION(
     Option<std::string> model{this, "Model", "模型名称", "qwen3.8-27b"};
     Option<std::string> apiKey{this, "ApiKey", "API Key（可留空）", ""};
     Option<int, IntConstrain> maxTokens{
-        this, "MaxTokens", "最大输出 Token 数", 32,
+        this, "MaxTokens", "最大输出 Token 数", 96,
         IntConstrain(8, 256)};
 )
 

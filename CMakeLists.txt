@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(fcitx5-english-hint VERSION 0.7.0 LANGUAGES CXX)
+project(fcitx5-english-hint VERSION 0.8.0 LANGUAGES CXX)
 
 set(REQUIRED_FCITX_VERSION 5.1.7)
 

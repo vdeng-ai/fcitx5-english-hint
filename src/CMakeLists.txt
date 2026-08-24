@@ -1,5 +1,6 @@
 add_library(english-hint MODULE
     addon.cpp
+    aux_formatter.cpp
     config.cpp
     llm_client.cpp
     local_dictionary.cpp

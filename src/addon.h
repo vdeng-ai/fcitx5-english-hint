@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace fcitx::english_hint {
@@ -29,13 +30,11 @@ public:
 
 private:
     void applyRuntimeConfig();
-    bool isRimeCandidateText(InputContext *inputContext,
-                             const Text &text) const;
+    bool isEligibleContext(InputContext *inputContext) const;
     bool containsHan(const std::string &text) const;
     bool shouldTranslate(const std::string &text) const;
-    std::vector<std::string>
-    collectMissingCandidates(InputContext *inputContext);
-    void filterOutput(InputContext *inputContext, Text &text);
+    void handleInputPanelUpdate(InputContext *inputContext);
+    void clearOwnedAuxDown(InputContext *inputContext);
     void refreshCurrentInputPanel();
 
     Instance *instance_;
@@ -45,7 +44,9 @@ private:
     PersistentCache persistentCache_;
     EventDispatcher dispatcher_;
     std::unique_ptr<TranslationWorker> worker_;
-    ScopedConnection outputFilterConnection_;
+    std::unique_ptr<HandlerTableEntry<EventHandler>> updateUIWatcher_;
+    std::unique_ptr<HandlerTableEntry<EventHandler>> destroyedWatcher_;
+    std::unordered_map<InputContext *, std::string> ownedAuxDown_;
 };
 
 } // namespace fcitx::english_hint
