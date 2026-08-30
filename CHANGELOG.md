@@ -1,5 +1,15 @@
 # 更新日志
 
+## 0.9.0
+
+- 增加标准 Debian `debian/` source package 配置，目标 Ubuntu 24.04（noble）amd64。
+- 新增 `scripts/build-source-package.sh`，支持本地 unsigned 验证和 CI signed source package。
+- GitHub tag 发布流程拆分为验证、GitHub Release、Launchpad PPA 三阶段。
+- PPA source version 使用 `X.Y.Z-1~ppaN~ubuntu24.04.1`，支持通过 revision 解决重复上传版本问题。
+- GitHub Actions 支持密码保护的 OpenPGP 私钥，以 non-interactive loopback 模式签名 `.dsc` / `.changes`。
+- CI 增加 source package 构建和 `lintian --fail-on error`，避免 PPA packaging 只在 tag 时才暴露问题。
+- 新增 Launchpad PPA 一次性配置与维护文档。
+
 ## 0.8.0
 
 - 中文候选恢复为 Rime / Fcitx5 原样显示，不再在候选文本后拼接英文。

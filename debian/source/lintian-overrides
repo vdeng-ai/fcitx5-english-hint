@@ -1,0 +1,5 @@
+# Launchpad PPA versions intentionally use a suffix such as
+# ~ppa1~ubuntu24.04.1. Lintian interprets the dotted Ubuntu release suffix as
+# an obsolete three-part binary-NMU revision, but this is a source upload and
+# the version scheme follows common Launchpad PPA practice.
+fcitx5-english-hint source: binary-nmu-debian-revision-in-source

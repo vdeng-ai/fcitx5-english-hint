@@ -4,7 +4,7 @@
 [![Fcitx5](https://img.shields.io/badge/Fcitx5-5.1.7-blue)](https://github.com/fcitx/fcitx5)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个轻量、高性能的 **Fcitx5 插件**：在 Rime / 雾凇拼音候选栏下方增加一行英文翻译提示，用日常中文输入顺带学习英语。
+一个轻量、高性能的 **Fcitx5 插件**：在 Rime / 雾凇拼音候选栏的辅助区域显示一行英文翻译提示，用日常中文输入顺带学习英语。
 
 > 项目原则：**只做英语辅助，不修改输入法主体，不让输入法变臃肿。**
 
@@ -13,7 +13,7 @@
 1. Improve efficiency 2. Improve benefits 3. Boost efficiency 4. Speed up 5. Improve performance
 ```
 
-第一行候选由 Rime / Fcitx5 原样显示；第二行由插件写入 `InputPanel::auxDown`。插件不再修改候选显示文本，也不会修改 Rime 词库、候选排序、选词行为或提交文本。
+中文候选由 Rime / Fcitx5 原样显示；英文行由插件写入 `InputPanel::auxDown`。不同 Fcitx UI/主题可能把 `auxDown` 绘制在候选上方或下方。插件不修改候选显示文本，也不会修改 Rime 词库、候选排序、选词行为或提交文本。
 
 ## 特性
 
@@ -41,12 +41,31 @@
 
 ## 安装
 
-### 推荐：安装 `.deb`
+### 推荐：Launchpad PPA
 
-从 GitHub Releases 下载当前 Ubuntu 24.04 amd64 包：
+v0.9.0 起支持通过 Launchpad PPA 发布，安装后可以直接跟随 `apt upgrade` 更新：
 
 ```bash
-sudo apt install ./fcitx5-english-hint_0.8.0_amd64.deb
+sudo add-apt-repository ppa:<你的 Launchpad ID>/fcitx5-english-hint
+sudo apt update
+sudo apt install fcitx5-english-hint
+```
+
+后续升级：
+
+```bash
+sudo apt update
+sudo apt upgrade
+```
+
+PPA 的一次性维护者配置见 [Launchpad PPA 发布配置](docs/launchpad-ppa.md)。
+
+### 直接安装 `.deb`
+
+也可以从 GitHub Releases 下载 Ubuntu 24.04 amd64 包：
+
+```bash
+sudo apt install ./fcitx5-english-hint_0.9.0_amd64.deb
 fcitx5 -r -d
 ```
 
@@ -114,7 +133,7 @@ fcitx5-remote -r
 
 ## 本地模型优化
 
-0.8.0 延续本地模型优化，不增加额外常驻服务：
+0.9.0 延续本地模型优化，不增加额外常驻服务：
 
 - `max_tokens` 默认 **96**：5 条中短句实测可完整返回；模型会按实际完成长度提前停止，不会因为上限提高而固定生成 96 tokens。
 - 默认发送 `reasoning_effort=none`，避免 Qwen 等模型把延迟浪费在 thinking 上。
@@ -178,7 +197,9 @@ InputPanel Update Event
               cache + UI refresh
 ```
 
-LLM 返回过程中，已命中的缓存/词典翻译会先显示，不会等待当前 5 条全部完成。若服务端因 token 上限返回 `finish_reason=length`，插件会丢弃最后一条可能被截断的半句，只重试缺失项，避免错误翻译进入持久缓存。\n\n网络不可达、超时、LLM 返回异常时，插件静默失败，原输入法继续正常工作。
+LLM 返回过程中，已命中的缓存/词典翻译会先显示，不会等待当前 5 条全部完成。若服务端因 token 上限返回 `finish_reason=length`，插件会丢弃最后一条可能被截断的半句，只重试缺失项，避免错误翻译进入持久缓存。
+
+网络不可达、超时、LLM 返回异常时，插件静默失败，原输入法继续正常工作。
 
 ## 构建 `.deb`
 
@@ -191,10 +212,23 @@ LLM 返回过程中，已命中的缓存/词典翻译会先显示，不会等待
 生成文件位于：
 
 ```text
-build-package/fcitx5-english-hint_0.8.0_amd64.deb
+build-package/fcitx5-english-hint_0.9.0_amd64.deb
 ```
 
-GitHub tag `v0.8.0` 会通过 GitHub Actions 在 `ubuntu-24.04` runner 上构建并创建 Release。
+GitHub tag `v0.9.0` 会通过 GitHub Actions 在 `ubuntu-24.04` runner 上完成编译/测试、创建 GitHub Release，并构建签名 source package 上传到 Launchpad PPA。
+
+本地验证 Launchpad source package：
+
+```bash
+bash scripts/build-source-package.sh --unsigned
+lintian --fail-on error build-source/*_source.changes
+```
+
+PPA 使用 Debian source package 版本形如：
+
+```text
+0.9.0-1~ppa1~ubuntu24.04.1
+```
 
 ## 测试
 

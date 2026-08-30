@@ -1,6 +1,7 @@
 /build/
 /build-*/
 /build-package/
+/build-source/
 /.cache/
 *.deb
 compile_commands.json

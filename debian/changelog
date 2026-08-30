@@ -1,0 +1,6 @@
+fcitx5-english-hint (0.9.0-1~ppa1~ubuntu24.04.1) noble; urgency=medium
+
+  * Add Launchpad PPA source-package publishing for Ubuntu 24.04.
+  * Keep GitHub Release .deb publishing in the same tag workflow.
+
+ -- vdeng-ai <8124973+vdeng-ai@users.noreply.github.com>  Sun, 30 Aug 2026 09:02:00 +0800

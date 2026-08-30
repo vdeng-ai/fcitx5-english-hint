@@ -9,7 +9,41 @@ permissions:
   contents: write
 
 jobs:
-  ubuntu-24-04-deb:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build and packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build extra-cmake-modules pkgconf \
+            libfcitx5core-dev libfcitx5config-dev \
+            libcurl4-openssl-dev \
+            devscripts debhelper lintian
+
+      - name: Verify tag matches project version
+        run: |
+          VERSION=$(grep -oP 'project\(fcitx5-english-hint VERSION \K[0-9.]+' CMakeLists.txt)
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Offline tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Validate Launchpad source package
+        run: |
+          bash scripts/build-source-package.sh --unsigned
+          lintian --fail-on error build-source/*_source.changes
+
+  github-release:
+    needs: validate
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -18,19 +52,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build extra-cmake-modules \
+            build-essential cmake ninja-build extra-cmake-modules pkgconf \
             libfcitx5core-dev libfcitx5config-dev \
             libcurl4-openssl-dev
 
-      - name: Verify tag matches project version
-        run: |
-          VERSION=$(grep -oP 'project\(fcitx5-english-hint VERSION \K[0-9.]+' CMakeLists.txt)
-          test "${GITHUB_REF_NAME}" = "v${VERSION}"
-
-      - name: Build package
+      - name: Build GitHub .deb
         run: bash scripts/build-deb.sh
 
-      - name: Upload CI artifact
+      - name: Upload GitHub Actions artifact
         uses: actions/upload-artifact@v4
         with:
           name: fcitx5-english-hint-${{ github.ref_name }}-ubuntu24.04-amd64
@@ -45,3 +74,90 @@ jobs:
             build-package/fcitx5-english-hint_*.deb \
             --title "Fcitx5 English Hint ${GITHUB_REF_NAME}" \
             --generate-notes
+
+  launchpad-ppa:
+    needs: [validate, github-release]
+    runs-on: ubuntu-24.04
+    env:
+      LAUNCHPAD_PPA: ${{ vars.LAUNCHPAD_PPA }}
+      LAUNCHPAD_PPA_REVISION: ${{ vars.LAUNCHPAD_PPA_REVISION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Launchpad configuration
+        env:
+          LAUNCHPAD_GPG_PRIVATE_KEY: ${{ secrets.LAUNCHPAD_GPG_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${LAUNCHPAD_PPA}" ]]; then
+            echo "ERROR: Repository variable LAUNCHPAD_PPA is not configured." >&2
+            exit 1
+          fi
+          if [[ ! "${LAUNCHPAD_PPA}" =~ ^ppa:[a-z0-9+.-]+/[a-z0-9+.-]+$ ]]; then
+            echo "ERROR: LAUNCHPAD_PPA must look like ppa:launchpad-id/ppa-name" >&2
+            exit 1
+          fi
+          if [[ -z "${LAUNCHPAD_GPG_PRIVATE_KEY}" ]]; then
+            echo "ERROR: Repository secret LAUNCHPAD_GPG_PRIVATE_KEY is not configured." >&2
+            exit 1
+          fi
+
+      - name: Install source-package tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build extra-cmake-modules pkgconf \
+            libfcitx5core-dev libfcitx5config-dev \
+            libcurl4-openssl-dev \
+            devscripts debhelper dput lintian gnupg
+
+      - name: Import Launchpad signing key
+        id: signing-key
+        env:
+          LAUNCHPAD_GPG_PRIVATE_KEY: ${{ secrets.LAUNCHPAD_GPG_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          printf '%s' "${LAUNCHPAD_GPG_PRIVATE_KEY}" | gpg --batch --import
+          FINGERPRINT=$(gpg --batch --with-colons --list-secret-keys \
+            | awk -F: '$1 == "fpr" { print $10; exit }')
+          if [[ -z "${FINGERPRINT}" ]]; then
+            echo "ERROR: No secret OpenPGP key was imported." >&2
+            exit 1
+          fi
+          echo "fingerprint=${FINGERPRINT}" >> "${GITHUB_OUTPUT}"
+          echo "Imported Launchpad signing key ${FINGERPRINT: -16}"
+
+      - name: Prepare non-interactive GPG signer
+        run: |
+          cat > "${RUNNER_TEMP}/gpg-launchpad" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec 3<<<"${LAUNCHPAD_GPG_PASSPHRASE:-}"
+          exec gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 "$@"
+          EOF
+          chmod 700 "${RUNNER_TEMP}/gpg-launchpad"
+
+      - name: Build signed source package
+        env:
+          LAUNCHPAD_GPG_PASSPHRASE: ${{ secrets.LAUNCHPAD_GPG_PASSPHRASE }}
+        run: |
+          bash scripts/build-source-package.sh \
+            --sign-key "${{ steps.signing-key.outputs.fingerprint }}" \
+            --sign-command "${RUNNER_TEMP}/gpg-launchpad" \
+            --ppa-revision "${LAUNCHPAD_PPA_REVISION:-1}"
+
+      - name: Verify source package
+        run: |
+          gpg --verify build-source/*.dsc
+          gpg --verify build-source/*_source.changes
+          lintian --fail-on error build-source/*_source.changes
+
+      - name: Upload source-package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fcitx5-english-hint-${{ github.ref_name }}-launchpad-source
+          path: build-source/
+          if-no-files-found: error
+
+      - name: Upload to Launchpad PPA
+        run: dput "${LAUNCHPAD_PPA}" build-source/*_source.changes

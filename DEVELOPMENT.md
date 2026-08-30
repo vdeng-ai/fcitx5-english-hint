@@ -178,13 +178,36 @@ LLM smoke test 调用用户当前配置的模型，并覆盖两种回归场景�
 
 ## 发布
 
-官方二进制只面向 Ubuntu 24.04 amd64：
+官方只支持 Ubuntu 24.04（noble）amd64，并同时维护两条发布产物：
+
+```text
+Git tag vX.Y.Z
+  ↓
+validate: build + offline tests + unsigned source package + lintian
+  ├─ GitHub Release: CPack .deb
+  └─ Launchpad PPA: signed Debian source package → Launchpad amd64 build
+```
+
+GitHub Release 二进制包：
 
 ```bash
 ./scripts/build-deb.sh
 ```
 
-GitHub `v*` tag 由 `ubuntu-24.04` Actions runner 构建 `.deb` 并发布。
+Launchpad source package 本地验证：
+
+```bash
+bash scripts/build-source-package.sh --unsigned
+lintian --fail-on error build-source/*_source.changes
+```
+
+PPA source version 使用：
+
+```text
+X.Y.Z-1~ppaN~ubuntu24.04.1
+```
+
+Release workflow 使用 Repository Variable `LAUNCHPAD_PPA` / `LAUNCHPAD_PPA_REVISION` 和 Secrets `LAUNCHPAD_GPG_PRIVATE_KEY` / `LAUNCHPAD_GPG_PASSPHRASE` 完成非交互 OpenPGP 签名及 `dput` 上传。具体一次性配置见 `docs/launchpad-ppa.md`。
 
 ## 项目边界
 

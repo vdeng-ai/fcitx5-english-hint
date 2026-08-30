@@ -1,0 +1,31 @@
+Source: fcitx5-english-hint
+Section: utils
+Priority: optional
+Maintainer: vdeng-ai <8124973+vdeng-ai@users.noreply.github.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ ninja-build,
+ extra-cmake-modules,
+ pkgconf,
+ libfcitx5core-dev (>= 5.1.7),
+ libfcitx5config-dev (>= 5.1.7),
+ libcurl4-openssl-dev
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/vdeng-ai/fcitx5-english-hint
+Vcs-Git: https://github.com/vdeng-ai/fcitx5-english-hint.git
+Vcs-Browser: https://github.com/vdeng-ai/fcitx5-english-hint
+
+Package: fcitx5-english-hint
+Architecture: amd64
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ fcitx5 (>= 5.1.7),
+ fcitx5-rime (>= 5.1.4)
+Description: English translation hints for Fcitx5 Rime candidates
+ A lightweight Fcitx5 addon that shows concise English translations for the
+ current Rime candidate page through the input panel auxiliary text. Network
+ requests run asynchronously and the original Chinese candidates are left
+ unchanged.

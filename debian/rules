@@ -1,0 +1,10 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@ --buildsystem=cmake+ninja
+
+override_dh_installchangelogs:
+	rm -f debian/fcitx5-english-hint/usr/share/doc/fcitx5-english-hint/CHANGELOG.md
+	dh_installchangelogs CHANGELOG.md
