@@ -24,7 +24,7 @@
 - **内存 LRU + 持久缓存**：常见翻译后续几乎即时显示。
 - **内置轻量词典**：常见短词优先本地 exact-match，不调用 LLM。
 - **候选零侵入**：中文候选保持原样，英文统一显示在 `auxDown`；若 Rime 自己正在使用 `auxDown`，插件主动让出。
-- **快捷键输入英文**：默认 `Ctrl+Alt+Enter` 提交当前高亮候选的英文，只使用已显示的翻译，不等待模型。
+- **Alt+数字输入英文**：`Alt+1` 输入第 1 项候选的英文，`Alt+2` 输入第 2 项，依此类推；只使用已显示的翻译，不等待模型。
 - **本地模型优化**：短 prompt、`max_tokens=96`、关闭 reasoning、HTTP 连接复用、局域网地址绕过代理。
 - **隐私保护**：密码/敏感输入框完全跳过；默认只发送当前候选短句，不发送历史、剪贴板、窗口内容或周边文本。
 - **标准 Fcitx 配置**：支持在 Fcitx5 配置工具中修改 Endpoint、Model、API Key 等参数。
@@ -111,15 +111,13 @@ cd fcitx5-english-hint
 ```ini
 [General]
 Enabled=True
+CommitEnglishWithAlt=True
 DebounceMs=200
 TimeoutMs=2500
 MaxTokens=96
 CacheSize=4096
 MaxBatch=5
 Debug=False
-
-[General/CommitEnglishKeys]
-0=Control+Alt+Return
 
 [LLM]
 Endpoint=http://127.0.0.1:8080/v1/chat/completions
@@ -137,13 +135,13 @@ fcitx5-remote -r
 
 ## 快捷键输入英文
 
-输入拼音，等对应英文提示出现后，按 **Ctrl+Alt+Enter** 即可输入当前高亮候选的英文；没有高亮时使用当前页第一个候选。可先用方向键移动高亮，再按快捷键。例如 `提高效率` 对应 `Improve efficiency`，快捷键会直接上屏 `Improve efficiency`。
+输入拼音，等对应英文提示出现后，按 **Alt+数字** 即可输入该序号候选的英文，无需先移动高亮。例如第 2 项是 `提高效率`，英文提示为 `2.Improve efficiency`，按 `Alt+2` 就会直接上屏 `Improve efficiency`；单独按 `2` 仍按 Rime 的方式选中文。
 
-- 只支持当前页已显示英文的候选（最多前 `MaxBatch` 项）；翻译未显示、候选已变化或输入框为密码/敏感框时，插件不拦截按键。
+- 只支持当前页已显示英文的候选（最多前 `MaxBatch` 项，当前上限为 5）；`Alt+1` 到 `Alt+5` 对应第 1 到第 5 项，也支持数字小键盘。翻译未显示、序号超出范围、候选已变化或输入框为密码/敏感框时，插件不拦截按键。
 - 成功提交会结束并清空当前**整段**拼音组合，只提交所选候选的英文；不保留分段输入中已选的中文或剩余拼音。
 - 普通空格、数字键、鼠标选词仍沿用 Rime 的中文输入行为。
-- 在 Fcitx5 配置工具 → English Hint → 通用中修改“输入当前候选的英文”；留空即可禁用。如果快捷键与桌面或其他插件冲突，可换成其他带修饰键的组合。
-- 手动禁用时保留空的 `[General/CommitEnglishKeys]` 节并删除该节中的按键项。新启动时若没有该配置项，会使用默认快捷键。
+- 在 Fcitx5 配置工具 → English Hint → 通用中取消勾选“Alt+数字输入对应候选的英文”即可禁用，英文提示仍保留。手动配置时设置 `[General]` 中的 `CommitEnglishWithAlt=False`。
+- 仅处理 `Alt+数字`，`Ctrl+Alt+数字`、`Alt+Shift+数字` 等组合不会触发英文提交；旧的 `Ctrl+Alt+Enter` 快捷键已移除。
 
 此操作复用显示时保存的最多 5 条翻译，不额外查询缓存、访问磁盘或发送网络请求，也不新增线程、服务和依赖。
 

@@ -2,6 +2,7 @@
 #include "english_commit.h"
 
 #include <fcitx-config/iniparser.h>
+#include <fcitx-utils/key.h>
 #include <fcitx/candidatelist.h>
 
 #include <cstdio>
@@ -38,36 +39,36 @@ int main() {
 
     try {
         EnglishHintFcitxConfig config;
-        require(Key("Control+Alt+Return")
-                    .checkKeyList(*config.general->commitEnglishKeys),
-                "default shortcut must match");
-        require(!Key("Return").checkKeyList(*config.general->commitEnglishKeys),
-                "ordinary Enter must not match");
-        require(!Key("Control+Return")
-                     .checkKeyList(*config.general->commitEnglishKeys),
-                "partial modifier combination must not match");
+        require(*config.general->commitEnglishWithAlt,
+                "Alt+number English selection must be enabled by default");
+        for (int digit = 1; digit <= 9; ++digit) {
+            require(Key("Alt+" + std::to_string(digit))
+                        .digitSelection(KeyState::Alt) == digit - 1,
+                    "Alt+number must map to that candidate's page position");
+        }
+        require(Key("Alt+0").digitSelection(KeyState::Alt) == 9,
+                "Alt+0 must map to the tenth position, never the first");
+        require(Key("Alt+KP_2").digitSelection(KeyState::Alt) == 1,
+                "keypad digits must use the same mapping");
+        for (const auto *key : {"1", "2", "Return", "Control+Alt+Return",
+                                "Control+2", "Control+Alt+2", "Alt+Shift+2",
+                                "Alt+Shift+KP_2", "Super+Alt+2"}) {
+            require(Key(key).digitSelection(KeyState::Alt) == -1,
+                    "ordinary selection, old shortcut and extra modifiers must not match");
+        }
 
-        // Round-trip a custom shortcut and an empty list (disabled).
+        // Disabling English selection must survive configuration round-trip.
         {
             auto general = config.general.mutableValue();
-            general->commitEnglishKeys.setValue(KeyList{Key("Control+Shift+e")});
+            general->commitEnglishWithAlt.setValue(false);
         }
         RawConfig raw;
         config.save(raw);
         EnglishHintFcitxConfig restored;
         restored.load(raw, true);
-        require(Key("Control+Shift+e")
-                    .checkKeyList(*restored.general->commitEnglishKeys),
-                "custom shortcut must survive configuration round-trip");
-        {
-            auto general = config.general.mutableValue();
-            general->commitEnglishKeys.setValue(KeyList{});
-        }
-        config.save(raw);
-        restored.load(raw, true);
-        require(restored.general->commitEnglishKeys->empty(),
-                "empty shortcut list must stay disabled");
-        char disabledIni[] = "[General/CommitEnglishKeys]\n";
+        require(!*restored.general->commitEnglishWithAlt,
+                "disabled English selection must stay disabled");
+        char disabledIni[] = "[General]\nCommitEnglishWithAlt=False\n";
         auto *file = fmemopen(disabledIni, sizeof(disabledIni) - 1, "r");
         require(file != nullptr, "in-memory INI stream must open");
         RawConfig disabledRaw;
@@ -75,8 +76,8 @@ int main() {
         fclose(file);
         EnglishHintFcitxConfig disabled;
         disabled.load(disabledRaw);
-        require(disabled.general->commitEnglishKeys->empty(),
-                "empty INI shortcut section must disable the shortcut");
+        require(!*disabled.general->commitEnglishWithAlt,
+                "INI flag must disable Alt+number English selection");
 
         InputPanel panel(nullptr);
         auto candidates = std::make_unique<TestCandidateList>();
@@ -89,33 +90,37 @@ int main() {
         list->append<DisplayOnlyCandidateWord>(Text("下一页"));
         panel.setCandidateList(std::move(candidates));
         const DisplayedTranslations displayed{
-            "1.Hello  2.Thank you",
-            {{"你好", "Hello"}, {"谢谢", "Thank you"}, {}, {}, {"占位", "dummy"}}};
+            "1.Hello  2.Thank you  4.Goodbye",
+            {{"你好", "Hello"}, {"谢谢", "Thank you"}, {},
+             {"再见", "Goodbye"}, {"占位", "dummy"}}};
         panel.setAuxDown(Text(displayed.auxLine));
-        require(selectedEnglishTranslation(panel, displayed) == "Hello",
-                "first candidate translation must be selected");
-        list->cursor = 1;
-        require(selectedEnglishTranslation(panel, displayed) == "Thank you",
-                "highlighted candidate translation must be selected");
-        for (int index : {2, 3, 4, 5, -2}) {
-            list->cursor = index;
-            require(selectedEnglishTranslation(panel, displayed).empty(),
+        for (int cursor : {0, 1, 3, -1}) {
+            list->cursor = cursor;
+            require(selectedEnglishTranslation(
+                        panel, displayed, Key("Alt+1").digitSelection(KeyState::Alt)) == "Hello",
+                    "Alt+1 must always select first candidate regardless of highlight");
+            require(selectedEnglishTranslation(
+                        panel, displayed, Key("Alt+2").digitSelection(KeyState::Alt)) == "Thank you",
+                    "Alt+2 must always select second candidate regardless of highlight");
+            require(selectedEnglishTranslation(
+                        panel, displayed, Key("Alt+4").digitSelection(KeyState::Alt)) == "Goodbye",
+                    "partial translations must keep original candidate numbers");
+        }
+        for (int index : {2, 4, 5, 9, -1, -2}) {
+            require(selectedEnglishTranslation(panel, displayed, index).empty(),
                     "missing, placeholder and invalid positions must be ignored");
         }
-        list->cursor = -1;
-        require(selectedEnglishTranslation(panel, displayed) == "Hello",
-                "unselected cursor must use the first candidate");
         panel.setAuxDown(Text("Rime-owned content"));
-        require(selectedEnglishTranslation(panel, displayed).empty(),
+        require(selectedEnglishTranslation(panel, displayed, 0).empty(),
                 "another addon's aux line must not permit English commit");
         panel.setAuxDown(Text(displayed.auxLine));
         list->next();
-        require(selectedEnglishTranslation(panel, displayed).empty(),
+        require(selectedEnglishTranslation(panel, displayed, 0).empty(),
                 "stale translation must not be used after paging");
         panel.setCandidateList(nullptr);
-        require(selectedEnglishTranslation(panel, displayed).empty(),
+        require(selectedEnglishTranslation(panel, displayed, 0).empty(),
                 "cleared composition must not permit English commit");
-        require(selectedEnglishTranslation(panel, {}).empty(),
+        require(selectedEnglishTranslation(panel, {}, 0).empty(),
                 "empty display snapshot must not permit English commit");
     } catch (const std::exception &error) {
         std::cerr << error.what() << '\n';

@@ -16,6 +16,7 @@ struct DisplayedTranslations {
 
 // Only select a translation that is still displayed for the same candidate.
 std::string selectedEnglishTranslation(const InputPanel &panel,
-                                      const DisplayedTranslations &displayed);
+                                      const DisplayedTranslations &displayed,
+                                      int index);
 
 } // namespace fcitx::english_hint

@@ -151,9 +151,13 @@ bool EnglishHint::shouldTranslate(const std::string &text) const {
 }
 
 void EnglishHint::handleKeyEvent(KeyEvent &event) {
-    // Ordinary typing only pays for a key comparison; never wait for translation.
+    // Match Alt+number before Rime can select the corresponding Chinese word.
     if (event.isRelease() || event.filtered() || event.accepted() ||
-        !event.key().checkKeyList(*uiConfig_.general->commitEnglishKeys)) {
+        !*uiConfig_.general->commitEnglishWithAlt) {
+        return;
+    }
+    const int index = event.rawKey().digitSelection(KeyState::Alt);
+    if (index < 0) {
         return;
     }
 
@@ -166,7 +170,8 @@ void EnglishHint::handleKeyEvent(KeyEvent &event) {
         return;
     }
     const auto translation =
-        selectedEnglishTranslation(inputContext->inputPanel(), owned->second);
+        selectedEnglishTranslation(inputContext->inputPanel(), owned->second,
+                                   index);
     if (translation.empty()) {
         return;
     }
