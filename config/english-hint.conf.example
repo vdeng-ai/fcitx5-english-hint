@@ -6,6 +6,9 @@ CacheSize=4096
 MaxBatch=5
 Debug=False
 
+[General/CommitEnglishKeys]
+0=Control+Alt+Return
+
 [LLM]
 Endpoint=http://127.0.0.1:8080/v1/chat/completions
 Model=qwen3.8-27b

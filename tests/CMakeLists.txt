@@ -33,3 +33,17 @@ target_compile_features(english-hint-aux-formatter-smoke PRIVATE cxx_std_17)
 
 add_test(NAME english-hint-aux-formatter-smoke
          COMMAND english-hint-aux-formatter-smoke)
+
+add_executable(english-hint-english-commit-smoke
+    english_commit_smoke.cpp
+    ../src/english_commit.cpp
+    ../src/config.cpp
+)
+target_include_directories(english-hint-english-commit-smoke PRIVATE ../src)
+target_compile_features(english-hint-english-commit-smoke PRIVATE cxx_std_17)
+target_link_libraries(english-hint-english-commit-smoke PRIVATE
+    Fcitx5::Core
+    Fcitx5::Config
+)
+add_test(NAME english-hint-english-commit-smoke
+         COMMAND english-hint-english-commit-smoke)

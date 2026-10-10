@@ -13,7 +13,7 @@
 1. Improve efficiency 2. Improve benefits 3. Boost efficiency 4. Speed up 5. Improve performance
 ```
 
-中文候选由 Rime / Fcitx5 原样显示；英文行由插件写入 `InputPanel::auxDown`。不同 Fcitx UI/主题可能把 `auxDown` 绘制在候选上方或下方。插件不修改候选显示文本，也不会修改 Rime 词库、候选排序、选词行为或提交文本。
+中文候选由 Rime / Fcitx5 原样显示；英文行由插件写入 `InputPanel::auxDown`。不同 Fcitx UI/主题可能把 `auxDown` 绘制在候选上方或下方。插件不修改候选显示文本、Rime 词库或候选排序；普通选词仍提交中文，也可以用专用快捷键提交已经显示的英文。
 
 ## 特性
 
@@ -24,6 +24,7 @@
 - **内存 LRU + 持久缓存**：常见翻译后续几乎即时显示。
 - **内置轻量词典**：常见短词优先本地 exact-match，不调用 LLM。
 - **候选零侵入**：中文候选保持原样，英文统一显示在 `auxDown`；若 Rime 自己正在使用 `auxDown`，插件主动让出。
+- **快捷键输入英文**：默认 `Ctrl+Alt+Enter` 提交当前高亮候选的英文，只使用已显示的翻译，不等待模型。
 - **本地模型优化**：短 prompt、`max_tokens=96`、关闭 reasoning、HTTP 连接复用、局域网地址绕过代理。
 - **隐私保护**：密码/敏感输入框完全跳过；默认只发送当前候选短句，不发送历史、剪贴板、窗口内容或周边文本。
 - **标准 Fcitx 配置**：支持在 Fcitx5 配置工具中修改 Endpoint、Model、API Key 等参数。
@@ -117,6 +118,9 @@ CacheSize=4096
 MaxBatch=5
 Debug=False
 
+[General/CommitEnglishKeys]
+0=Control+Alt+Return
+
 [LLM]
 Endpoint=http://127.0.0.1:8080/v1/chat/completions
 Model=qwen3.8-27b
@@ -130,6 +134,18 @@ fcitx5-remote -r
 ```
 
 `ApiKey` 可以为空，适合 llama.cpp、vLLM、LiteLLM 等本地 OpenAI-compatible 服务。
+
+## 快捷键输入英文
+
+输入拼音，等对应英文提示出现后，按 **Ctrl+Alt+Enter** 即可输入当前高亮候选的英文；没有高亮时使用当前页第一个候选。可先用方向键移动高亮，再按快捷键。例如 `提高效率` 对应 `Improve efficiency`，快捷键会直接上屏 `Improve efficiency`。
+
+- 只支持当前页已显示英文的候选（最多前 `MaxBatch` 项）；翻译未显示、候选已变化或输入框为密码/敏感框时，插件不拦截按键。
+- 成功提交会结束并清空当前**整段**拼音组合，只提交所选候选的英文；不保留分段输入中已选的中文或剩余拼音。
+- 普通空格、数字键、鼠标选词仍沿用 Rime 的中文输入行为。
+- 在 Fcitx5 配置工具 → English Hint → 通用中修改“输入当前候选的英文”；留空即可禁用。如果快捷键与桌面或其他插件冲突，可换成其他带修饰键的组合。
+- 手动禁用时保留空的 `[General/CommitEnglishKeys]` 节并删除该节中的按键项。新启动时若没有该配置项，会使用默认快捷键。
+
+此操作复用显示时保存的最多 5 条翻译，不额外查询缓存、访问磁盘或发送网络请求，也不新增线程、服务和依赖。
 
 ## 本地模型优化
 
@@ -232,11 +248,12 @@ PPA 使用 Debian source package 版本形如：
 
 ## 测试
 
-离线缓存/词典与 `auxDown` 格式测试：
+离线缓存/词典、`auxDown` 格式与英文快捷选词测试：
 
 ```bash
 ./build/tests/english-hint-cache-smoke
 ./build/tests/english-hint-aux-formatter-smoke
+./build/tests/english-hint-english-commit-smoke
 ```
 
 LLM 实机测试：

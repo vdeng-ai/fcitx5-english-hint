@@ -2,12 +2,12 @@
 
 ## 目标
 
-Fcitx5 English Hint 是一个**显示层英语辅助插件**。核心要求：
+Fcitx5 English Hint 是一个**轻量英语辅助插件**。核心要求：
 
 - 不修改 Rime / 雾凇拼音主体；
-- 不改变候选排序、选词行为和最终提交文本；
+- 不改变候选排序和普通中文选词行为；仅专用快捷键可以提交已显示的英文；
 - 中文候选行保持 Fcitx5 / Rime 原样；
-- 英文只写入 `InputPanel::auxDown`；
+- 英文提示只写入 `InputPanel::auxDown`；
 - Fcitx5 主线程不做网络 I/O；
 - 网络或模型异常时，原输入法必须继续正常工作。
 
@@ -68,6 +68,14 @@ InputContextUpdateUI event
 
 这样可以保证插件只做附加显示，不抢占输入法主体已有 UI 信息。
 
+## 英文提交快捷键
+
+使用 Fcitx5 原生 `KeyListOption` 配置 `General/CommitEnglishKeys`，默认 `Control+Alt+Return`，空列表禁用。在 `PreInputMethod` 阶段监听按键，普通按键仅做快捷键匹配。只在启用、Rime、非敏感且有焦点的输入框中处理快捷键按下事件。
+
+`auxDown` 的 ownership 记录同时保存当前页最多 5 个候选的中文原文和已显示的英文。提交时核对辅助行仍属于插件、当前位置仍是同一候选，且该位置已有英文。默认使用当前高亮位置；无高亮（`cursorIndex == -1`）时使用首项。未满足条件时原样放行按键，不查缓存、不请求翻译、不等待 worker。
+
+成功时拦截按键，清除插件提示，通过 `InputContext::reset()` 清空 Rime 整段 composition，再 `commitString()` 提交英文。不能调用中文候选的 `select()`，否则可能先上屏中文。此简化方案不保留分段输入中已选择的中文和剩余拼音。
+
 ## 线程模型
 
 ### Fcitx5 主线程
@@ -75,6 +83,7 @@ InputContextUpdateUI event
 只允许：
 
 - 监听 `InputContextUpdateUI`；
+- 在 `PreInputMethod` 匹配英文提交快捷键，核对显示快照并提交现成英文；
 - 判断 Rime / PasswordOrSensitive；
 - 读取当前页最多 5 个候选；
 - UTF-8 / 汉字快速过滤；
@@ -173,6 +182,9 @@ ctest --test-dir build --output-on-failure
 
 - cache / dictionary；
 - `auxDown` 格式：序号后不留空格，英文项目之间 2 个空格。
+- 英文选词：高亮/首项、缺失翻译、占位候选、无效位置、辅助行让出和换页后的旧快照；快捷键配置修改和留空禁用。
+
+实际输入框手工验证见 [英文提交检查清单](tests/ENGLISH_COMMIT_CHECKLIST.md)。离线测试不覆盖真实 Rime composition 与应用客户端的提交联动。
 
 LLM smoke test 调用用户当前配置的模型，并覆盖两种回归场景：48-token 截断时最后一条必须被丢弃；96-token 正常预算下 5 条中短句必须全部返回。
 

@@ -2,6 +2,7 @@
 
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/option.h>
+#include <fcitx-utils/key.h>
 
 #include <cstddef>
 #include <string>
@@ -25,6 +26,9 @@ struct EnglishHintConfig {
 FCITX_CONFIGURATION(
     EnglishHintGeneralConfig,
     Option<bool> enabled{this, "Enabled", "启用英文提示", true};
+    KeyListOption commitEnglishKeys{
+        this, "CommitEnglishKeys", "输入当前候选的英文（留空禁用）",
+        {Key("Control+Alt+Return")}, KeyListConstrain()};
     Option<int, IntConstrain> debounceMs{
         this, "DebounceMs", "防抖时间（毫秒）", 200, IntConstrain(0, 2000)};
     Option<int, IntConstrain> timeoutMs{

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "english_commit.h"
 #include "lru_cache.h"
 #include "persistent_cache.h"
 #include "translation_worker.h"
@@ -29,6 +30,7 @@ public:
     void setConfig(const RawConfig &config) override;
 
 private:
+    void handleKeyEvent(KeyEvent &event);
     void applyRuntimeConfig();
     bool isEligibleContext(InputContext *inputContext) const;
     bool containsHan(const std::string &text) const;
@@ -45,8 +47,9 @@ private:
     EventDispatcher dispatcher_;
     std::unique_ptr<TranslationWorker> worker_;
     std::unique_ptr<HandlerTableEntry<EventHandler>> updateUIWatcher_;
+    std::unique_ptr<HandlerTableEntry<EventHandler>> keyWatcher_;
     std::unique_ptr<HandlerTableEntry<EventHandler>> destroyedWatcher_;
-    std::unordered_map<InputContext *, std::string> ownedAuxDown_;
+    std::unordered_map<InputContext *, DisplayedTranslations> ownedAuxDown_;
 };
 
 } // namespace fcitx::english_hint

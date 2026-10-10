@@ -37,6 +37,10 @@ EnglishHint::EnglishHint(Instance *instance)
     }
     applyRuntimeConfig();
 
+    keyWatcher_ = instance_->watchEvent(
+        EventType::InputContextKeyEvent, EventWatcherPhase::PreInputMethod,
+        [this](Event &event) { handleKeyEvent(static_cast<KeyEvent &>(event)); });
+
     updateUIWatcher_ = instance_->watchEvent(
         EventType::InputContextUpdateUI, EventWatcherPhase::PostInputMethod,
         [this](Event &event) {
@@ -58,6 +62,7 @@ EnglishHint::EnglishHint(Instance *instance)
 EnglishHint::~EnglishHint() {
     destroyedWatcher_.reset();
     updateUIWatcher_.reset();
+    keyWatcher_.reset();
     worker_.reset();
     dispatcher_.detach();
 }
@@ -145,6 +150,34 @@ bool EnglishHint::shouldTranslate(const std::string &text) const {
            text.find('\r') == std::string::npos;
 }
 
+void EnglishHint::handleKeyEvent(KeyEvent &event) {
+    // Ordinary typing only pays for a key comparison; never wait for translation.
+    if (event.isRelease() || event.filtered() || event.accepted() ||
+        !event.key().checkKeyList(*uiConfig_.general->commitEnglishKeys)) {
+        return;
+    }
+
+    auto *inputContext = event.inputContext();
+    if (!isEligibleContext(inputContext) || !inputContext->hasFocus()) {
+        return;
+    }
+    const auto owned = ownedAuxDown_.find(inputContext);
+    if (owned == ownedAuxDown_.end()) {
+        return;
+    }
+    const auto translation =
+        selectedEnglishTranslation(inputContext->inputPanel(), owned->second);
+    if (translation.empty()) {
+        return;
+    }
+
+    event.filterAndAccept();
+    clearOwnedAuxDown(inputContext);
+    // Rime's reset clears the composition without selecting/committing Chinese.
+    inputContext->reset();
+    inputContext->commitString(translation);
+}
+
 void EnglishHint::clearOwnedAuxDown(InputContext *inputContext) {
     if (!inputContext) {
         return;
@@ -156,7 +189,7 @@ void EnglishHint::clearOwnedAuxDown(InputContext *inputContext) {
     }
 
     auto &panel = inputContext->inputPanel();
-    if (panel.auxDown().toString() == owned->second) {
+    if (panel.auxDown().toString() == owned->second.auxLine) {
         panel.setAuxDown(Text{});
     }
     ownedAuxDown_.erase(owned);
@@ -174,7 +207,7 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
     // Never overwrite auxDown content owned by Rime or another addon. We only
     // take ownership when it is empty or still contains our previous line.
     const bool ownsCurrent =
-        owned != ownedAuxDown_.end() && currentAux == owned->second;
+        owned != ownedAuxDown_.end() && currentAux == owned->second.auxLine;
     if (!currentAux.empty() && !ownsCurrent) {
         ownedAuxDown_.erase(inputContext);
         return;
@@ -195,6 +228,8 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
         config_.maxBatch, static_cast<std::size_t>(candidateList->size()));
     std::vector<std::string> missing;
     std::vector<std::pair<std::string, std::string>> translated;
+    DisplayedTranslations displayed;
+    displayed.candidates.resize(visibleCount);
     missing.reserve(visibleCount);
     translated.reserve(visibleCount);
 
@@ -224,6 +259,7 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
         if (label.empty()) {
             label = std::to_string(i + 1);
         }
+        displayed.candidates[i] = {source, translation};
         translated.emplace_back(std::move(label), std::move(translation));
     }
 
@@ -234,7 +270,8 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
         if (currentAux != auxLine) {
             panel.setAuxDown(Text(auxLine));
         }
-        ownedAuxDown_[inputContext] = auxLine;
+        displayed.auxLine = auxLine;
+        ownedAuxDown_[inputContext] = std::move(displayed);
     }
 
     // Show any cached/dictionary translations immediately, even when some
