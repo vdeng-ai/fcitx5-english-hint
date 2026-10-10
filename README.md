@@ -66,7 +66,7 @@ PPA 的一次性维护者配置见 [Launchpad PPA 发布配置](docs/launchpad-p
 也可以从 GitHub Releases 下载 Ubuntu 24.04 amd64 包：
 
 ```bash
-sudo apt install ./fcitx5-english-hint_0.9.0_amd64.deb
+sudo apt install ./fcitx5-english-hint_0.10.0_amd64.deb
 fcitx5 -r -d
 ```
 
@@ -147,7 +147,7 @@ fcitx5-remote -r
 
 ## 本地模型优化
 
-0.9.0 延续本地模型优化，不增加额外常驻服务：
+0.10.0 延续本地模型优化，不增加额外常驻服务：
 
 - `max_tokens` 默认 **96**：5 条中短句实测可完整返回；模型会按实际完成长度提前停止，不会因为上限提高而固定生成 96 tokens。
 - 默认发送 `reasoning_effort=none`，避免 Qwen 等模型把延迟浪费在 thinking 上。
@@ -226,10 +226,10 @@ LLM 返回过程中，已命中的缓存/词典翻译会先显示，不会等待
 生成文件位于：
 
 ```text
-build-package/fcitx5-english-hint_0.9.0_amd64.deb
+build-package/fcitx5-english-hint_0.10.0_amd64.deb
 ```
 
-GitHub tag `v0.9.0` 会通过 GitHub Actions 在 `ubuntu-24.04` runner 上完成编译/测试、创建 GitHub Release，并构建签名 source package 上传到 Launchpad PPA。
+GitHub tag `v0.10.0` 会通过 GitHub Actions 在 `ubuntu-24.04` runner 上完成编译/测试、创建 GitHub Release，并构建签名 source package 上传到 Launchpad PPA。
 
 本地验证 Launchpad source package：
 
@@ -241,7 +241,7 @@ lintian --fail-on error build-source/*_source.changes
 PPA 使用 Debian source package 版本形如：
 
 ```text
-0.9.0-1~ppa1~ubuntu24.04.1
+0.10.0-1~ppa1~ubuntu24.04.1
 ```
 
 ## 测试
