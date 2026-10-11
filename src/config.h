@@ -10,6 +10,7 @@ namespace fcitx::english_hint {
 
 struct EnglishHintConfig {
     bool enabled = true;
+    bool verticalBilingual = false;
     std::string endpoint =
         "http://127.0.0.1:8080/v1/chat/completions";
     std::string model = "qwen3.8-27b";
@@ -25,6 +26,8 @@ struct EnglishHintConfig {
 FCITX_CONFIGURATION(
     EnglishHintGeneralConfig,
     Option<bool> enabled{this, "Enabled", "启用英文提示", true};
+    Option<bool> verticalBilingual{
+        this, "VerticalBilingual", "竖排中英同行", false};
     Option<bool> commitEnglishWithAlt{
         this, "CommitEnglishWithAlt", "Alt+数字输入对应候选的英文", true};
     Option<int, IntConstrain> debounceMs{

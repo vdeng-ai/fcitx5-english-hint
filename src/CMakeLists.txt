@@ -3,6 +3,7 @@ add_library(english-hint MODULE
     aux_formatter.cpp
     config.cpp
     english_commit.cpp
+    inline_candidates.cpp
     llm_client.cpp
     local_dictionary.cpp
     persistent_cache.cpp

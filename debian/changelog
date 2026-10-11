@@ -1,3 +1,11 @@
+fcitx5-english-hint (0.11.0-1~ppa1~ubuntu24.04.1) noble; urgency=medium
+
+  * Add optional vertical bilingual candidate display; retain auxDown by default.
+  * Preserve original Chinese selection, paging and Alt-number English selection.
+  * Add candidate adapter regressions and isolated real-Rime integration tests.
+
+ -- vdeng-ai <8124973+vdeng-ai@users.noreply.github.com>  Sun, 11 Oct 2026 14:00:00 +0800
+
 fcitx5-english-hint (0.10.0-1~ppa1~ubuntu24.04.1) noble; urgency=medium
 
   * Add Alt+number selection of displayed English candidate translations.

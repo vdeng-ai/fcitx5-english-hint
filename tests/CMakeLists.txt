@@ -37,6 +37,7 @@ add_test(NAME english-hint-aux-formatter-smoke
 add_executable(english-hint-english-commit-smoke
     english_commit_smoke.cpp
     ../src/english_commit.cpp
+    ../src/inline_candidates.cpp
     ../src/config.cpp
 )
 target_include_directories(english-hint-english-commit-smoke PRIVATE ../src)
@@ -47,3 +48,38 @@ target_link_libraries(english-hint-english-commit-smoke PRIVATE
 )
 add_test(NAME english-hint-english-commit-smoke
          COMMAND english-hint-english-commit-smoke)
+
+add_executable(english-hint-inline-candidates-smoke
+    inline_candidates_smoke.cpp
+    ../src/inline_candidates.cpp
+    ../src/english_commit.cpp
+    ../src/config.cpp
+)
+target_include_directories(english-hint-inline-candidates-smoke PRIVATE ../src)
+target_compile_features(english-hint-inline-candidates-smoke PRIVATE cxx_std_17)
+target_link_libraries(english-hint-inline-candidates-smoke PRIVATE
+    Fcitx5::Core Fcitx5::Config)
+add_test(NAME english-hint-inline-candidates-smoke
+         COMMAND english-hint-inline-candidates-smoke)
+
+option(ENGLISH_HINT_RIME_INTEGRATION "Test with an installed fcitx5-rime addon" OFF)
+if(ENGLISH_HINT_RIME_INTEGRATION)
+    add_executable(english-hint-rime-integration
+        rime_integration.cpp
+        ../src/addon.cpp
+        ../src/aux_formatter.cpp
+        ../src/config.cpp
+        ../src/english_commit.cpp
+        ../src/inline_candidates.cpp
+        ../src/llm_client.cpp
+        ../src/local_dictionary.cpp
+        ../src/persistent_cache.cpp
+        ../src/translation_worker.cpp
+    )
+    target_include_directories(english-hint-rime-integration PRIVATE ../src)
+    target_compile_features(english-hint-rime-integration PRIVATE cxx_std_17)
+    target_link_libraries(english-hint-rime-integration PRIVATE
+        Fcitx5::Core Fcitx5::Config CURL::libcurl Threads::Threads)
+    add_test(NAME english-hint-rime-integration COMMAND english-hint-rime-integration)
+    set_tests_properties(english-hint-rime-integration PROPERTIES TIMEOUT 45)
+endif()

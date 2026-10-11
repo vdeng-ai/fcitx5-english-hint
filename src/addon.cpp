@@ -1,5 +1,6 @@
 #include "addon.h"
 #include "aux_formatter.h"
+#include "inline_candidates.h"
 #include "local_dictionary.h"
 
 #include <fcitx-utils/capabilityflags.h>
@@ -60,6 +61,9 @@ EnglishHint::EnglishHint(Instance *instance)
 }
 
 EnglishHint::~EnglishHint() {
+    while (!ownedAuxDown_.empty()) {
+        clearOwnedAuxDown(ownedAuxDown_.begin()->first);
+    }
     destroyedWatcher_.reset();
     updateUIWatcher_.reset();
     keyWatcher_.reset();
@@ -68,6 +72,10 @@ EnglishHint::~EnglishHint() {
 }
 
 void EnglishHint::applyRuntimeConfig() {
+    // Remove displays in every tracked context, including unfocused windows.
+    while (!ownedAuxDown_.empty()) {
+        clearOwnedAuxDown(ownedAuxDown_.begin()->first);
+    }
     worker_.reset();
     config_ = toRuntimeConfig(uiConfig_);
     cache_.setCapacity(config_.cacheSize);
@@ -188,6 +196,7 @@ void EnglishHint::clearOwnedAuxDown(InputContext *inputContext) {
         return;
     }
 
+    clearInlineCandidates(inputContext->inputPanel());
     const auto owned = ownedAuxDown_.find(inputContext);
     if (owned == ownedAuxDown_.end()) {
         return;
@@ -214,6 +223,7 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
     const bool ownsCurrent =
         owned != ownedAuxDown_.end() && currentAux == owned->second.auxLine;
     if (!currentAux.empty() && !ownsCurrent) {
+        clearInlineCandidates(panel);
         ownedAuxDown_.erase(inputContext);
         return;
     }
@@ -223,7 +233,7 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
         return;
     }
 
-    const auto candidateList = panel.candidateList();
+    const auto candidateList = originalCandidates(panel);
     if (!candidateList || candidateList->empty()) {
         clearOwnedAuxDown(inputContext);
         return;
@@ -268,15 +278,25 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
         translated.emplace_back(std::move(label), std::move(translation));
     }
 
-    const std::string auxLine = formatAuxTranslations(translated);
-    if (auxLine.empty()) {
-        clearOwnedAuxDown(inputContext);
-    } else {
-        if (currentAux != auxLine) {
-            panel.setAuxDown(Text(auxLine));
+    if (config_.verticalBilingual) {
+        if (ownsCurrent) {
+            panel.setAuxDown(Text{});
         }
-        displayed.auxLine = auxLine;
+        setInlineCandidates(panel, displayed.candidates);
+        displayed.inlineList = panel.candidateList();
         ownedAuxDown_[inputContext] = std::move(displayed);
+    } else {
+        clearInlineCandidates(panel);
+        const std::string auxLine = formatAuxTranslations(translated);
+        if (auxLine.empty()) {
+            clearOwnedAuxDown(inputContext);
+        } else {
+            if (currentAux != auxLine) {
+                panel.setAuxDown(Text(auxLine));
+            }
+            displayed.auxLine = auxLine;
+            ownedAuxDown_[inputContext] = std::move(displayed);
+        }
     }
 
     // Show any cached/dictionary translations immediately, even when some

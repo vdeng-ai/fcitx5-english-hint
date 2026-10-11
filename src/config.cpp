@@ -10,6 +10,7 @@ EnglishHintConfig toRuntimeConfig(const EnglishHintFcitxConfig &config) {
     const auto &llm = *config.llm;
 
     runtime.enabled = *general.enabled;
+    runtime.verticalBilingual = *general.verticalBilingual;
     runtime.debounceMs = *general.debounceMs;
     runtime.timeoutMs = *general.timeoutMs;
     runtime.cacheSize = static_cast<std::size_t>(*general.cacheSize);

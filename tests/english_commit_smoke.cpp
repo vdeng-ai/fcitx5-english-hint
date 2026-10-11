@@ -92,7 +92,7 @@ int main() {
         const DisplayedTranslations displayed{
             "1.Hello  2.Thank you  4.Goodbye",
             {{"你好", "Hello"}, {"谢谢", "Thank you"}, {},
-             {"再见", "Goodbye"}, {"占位", "dummy"}}};
+             {"再见", "Goodbye"}, {"占位", "dummy"}}, {}};
         panel.setAuxDown(Text(displayed.auxLine));
         for (int cursor : {0, 1, 3, -1}) {
             list->cursor = cursor;

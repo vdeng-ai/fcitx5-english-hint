@@ -30,6 +30,7 @@ elif command -v fcitx5-remote >/dev/null 2>&1; then
   fcitx5-remote -r || true
 fi
 
-echo "Installed fcitx5-english-hint 0.4.1."
+echo "Installed fcitx5-english-hint."
 echo "Config: ${CONFIG_FILE}"
-echo "Type with Rime; translated candidates should appear as: 中文 [English]"
+echo "Type with Rime; English hints appear in the auxiliary line by default."
+echo "Enable General/VerticalBilingual for vertical Chinese-English candidate rows."

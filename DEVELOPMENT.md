@@ -6,8 +6,8 @@ Fcitx5 English Hint 是一个**轻量英语辅助插件**。核心要求：
 
 - 不修改 Rime / 雾凇拼音主体；
 - 不改变候选排序和普通中文选词行为；仅专用快捷键可以提交已显示的英文；
-- 中文候选行保持 Fcitx5 / Rime 原样；
-- 英文提示只写入 `InputPanel::auxDown`；
+- 默认中文候选行保持 Fcitx5 / Rime 原样，英文提示写入 `InputPanel::auxDown`；
+- 可选竖排中英同行仅装饰显示，保留原候选对象的选词和翻页行为；
 - Fcitx5 主线程不做网络 I/O；
 - 网络或模型异常时，原输入法必须继续正常工作。
 
@@ -68,11 +68,19 @@ InputContextUpdateUI event
 
 这样可以保证插件只做附加显示，不抢占输入法主体已有 UI 信息。
 
+## 可选竖排中英同行
+
+`General/VerticalBilingual` 默认 `False`。开启后使用 `InlineCandidateList` 包装原列表的 `shared_ptr`，给当前页已有翻译的候选显示文本附加英文并标记 `DontCommit`，同时返回 `CandidateLayoutHint::Vertical`。不修改原词条、标签或排序，候选的 `select()` 继续调用原候选；调用期间持有原列表，允许 Rime 同步替换 InputPanel。没有翻译的候选直接返回原对象。
+
+包装仅暴露原列表支持的 pageable、bulk、modifiable、cursor-movable 接口，并委托原接口执行。全局 bulk 候选保持原显示，避免把页内翻译错配到全局索引。翻页和候选修改先使翻译失效；包装也会核对原页码及中文原文。异步刷新复用同一层包装，读取原列表，不重复拼接英文或将英文发给 LLM。
+
+竖排英文快捷键用当前候选列表的弱引用验证所有权，并核对包装仍显示对应英文。默认模式继续核对 `auxDown`。重新配置时清理所有记录过的输入上下文。关闭竖排后适配器透明委托原列表直到 Rime 重建，因为 InputPanel 的 setter 只接受 `unique_ptr`，不能直接放回已有的 `shared_ptr`；此时返回原布局和原候选对象。
+
 ## 英文提交快捷键
 
 使用 Fcitx5 原生布尔配置 `General/CommitEnglishWithAlt`，默认启用，设为 `False` 禁用。在 `PreInputMethod` 阶段监听按键，通过 `rawKey().digitSelection(KeyState::Alt)` 将 `Alt+数字` 映射为当前页的候选索引，支持数字小键盘。读取 raw key 保留额外的 Shift 修饰键，避免归一化后把 `Alt+Shift+小键盘数字` 误认为 `Alt+数字`。普通数字键及带 Ctrl、Shift、Super 的组合不触发。只在启用、Rime、非敏感且有焦点的输入框中处理按下事件。
 
-`auxDown` 的 ownership 记录同时保存当前页最多 5 个候选的中文原文和已显示的英文。提交时核对辅助行仍属于插件、数字指定的位置仍是同一候选，且该位置已有英文。选择完全由数字决定，与当前高亮位置无关；部分翻译缺失时保留原候选位置，不能将翻译列表压缩后重排。未满足条件时原样放行按键，不查缓存、不请求翻译、不等待 worker。
+显示的 ownership 记录同时保存当前页最多 5 个候选的中文原文和已显示的英文。提交时核对辅助行或竖排候选显示仍属于插件、数字指定的位置仍是同一候选，且该位置已有英文。选择完全由数字决定，与当前高亮位置无关；部分翻译缺失时保留原候选位置，不能将翻译列表压缩后重排。未满足条件时原样放行按键，不查缓存、不请求翻译、不等待 worker。
 
 成功时拦截按键，清除插件提示，通过 `InputContext::reset()` 清空 Rime 整段 composition，再 `commitString()` 提交英文。不能调用中文候选的 `select()`，否则可能先上屏中文。此简化方案不保留分段输入中已选择的中文和剩余拼音。
 
@@ -89,7 +97,7 @@ InputContextUpdateUI event
 - UTF-8 / 汉字快速过滤；
 - 内存 LRU 查询；
 - 本地 exact-match 词典查询；
-- 构造一条 `auxDown` 字符串；
+- 构造一条 `auxDown` 字符串或最多 5 项的候选显示包装；
 - 已有翻译立即显示，缺失候选继续异步请求；
 - 提交最新缺失候选 snapshot。
 
@@ -183,8 +191,19 @@ ctest --test-dir build --output-on-failure
 - cache / dictionary；
 - `auxDown` 格式：序号后不留空格，英文项目之间 2 个空格。
 - 英文选词：Alt+数字与小键盘的索引映射、高亮位置无关、缺失翻译保留序号、占位候选、无效位置、辅助行让出和换页后的旧快照；普通数字与额外修饰键不匹配，禁用配置可保存和读取。
+- 竖排显示：标签、原文、不可提交英文、可选候选接口、翻页/修改后的失效、模式关闭与原候选选词委托。
 
-实际输入框手工验证见 [英文提交检查清单](tests/ENGLISH_COMMIT_CHECKLIST.md)。离线测试不覆盖真实 Rime composition 与应用客户端的提交联动。
+安装 `fcitx5-rime` 后可启用真实输入法集成测试（无需 librime 开发包）：
+
+```bash
+cmake -S . -B build -DENGLISH_HINT_RIME_INTEGRATION=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+该测试通过真实 Fcitx 事件管线与 Rime 引擎验证默认/竖排显示、数字选中文、鼠标使用的候选 `select()`、Alt+数字选英文、键盘/UI 翻页和配置重载；所有词库、配置和翻译缓存写入临时目录，测试后清理，不读取私人模型地址。它不操作桌面鼠标，不覆盖主题的渲染与点击区域。
+
+实际输入框手工验证见 [英文提交检查清单](tests/ENGLISH_COMMIT_CHECKLIST.md)。基础离线测试不加载 Rime；可选集成测试覆盖真实 Rime composition 与测试客户端的提交联动，桌面应用和主题仍需要手工验证。
 
 LLM smoke test 调用用户当前配置的模型，并覆盖两种回归场景：48-token 截断时最后一条必须被丢弃；96-token 正常预算下 5 条中短句必须全部返回。
 

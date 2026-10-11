@@ -13,7 +13,7 @@
 1. Improve efficiency 2. Improve benefits 3. Boost efficiency 4. Speed up 5. Improve performance
 ```
 
-中文候选由 Rime / Fcitx5 原样显示；英文行由插件写入 `InputPanel::auxDown`。不同 Fcitx UI/主题可能把 `auxDown` 绘制在候选上方或下方。插件不修改候选显示文本、Rime 词库或候选排序；普通选词仍提交中文，也可以用专用快捷键提交已经显示的英文。
+默认模式中，中文候选由 Rime / Fcitx5 原样显示，英文行由插件写入 `InputPanel::auxDown`。不同 Fcitx UI/主题可能把 `auxDown` 绘制在候选上方或下方。也可以开启[竖排中英同行](#显示模式)，让英文出现在对应中文候选旁边。两种模式都不修改 Rime 词库或候选排序；普通选词仍提交中文，也可以用专用快捷键提交已经显示的英文。
 
 看到上面的英文提示后，可以直接按对应数字选词，无需先移动高亮：
 
@@ -26,6 +26,8 @@
 
 **v0.10.0 新增**：`Alt+1`～`Alt+5` 提交当前页对应候选已显示的英文，也支持数字小键盘；复用现成翻译，不增加网络请求、线程或依赖。提交会结束并清空当前整段拼音组合，详情和禁用方法见[快捷键输入英文](#快捷键输入英文)。
 
+**v0.11.0 新增**：可选“竖排中英同行”，默认关闭，已有用户保留原显示。英文只作为显示提示，鼠标和普通数字选词仍提交中文。
+
 ## 特性
 
 - **纯 Fcitx5 Addon**：不修改 Rime / 雾凇拼音，不 fork fcitx5-rime。
@@ -35,7 +37,7 @@
 - **200 ms debounce + latest-wins**：快速连续输入时只保留最新候选快照。
 - **内存 LRU + 持久缓存**：常见翻译后续几乎即时显示。
 - **内置轻量词典**：常见短词优先本地 exact-match，不调用 LLM。
-- **候选零侵入**：中文候选保持原样，英文统一显示在 `auxDown`；若 Rime 自己正在使用 `auxDown`，插件主动让出。
+- **两种显示模式**：默认中文候选保持原样、英文显示在 `auxDown`；可选竖排中英同行，保留原候选选词和翻页行为。若 Rime 自己正在使用 `auxDown`，插件主动让出。
 - **本地模型优化**：短 prompt、`max_tokens=96`、关闭 reasoning、HTTP 连接复用、局域网地址绕过代理。
 - **隐私保护**：密码/敏感输入框完全跳过；默认只发送当前候选短句，不发送历史、剪贴板、窗口内容或周边文本。
 - **标准 Fcitx 配置**：支持在 Fcitx5 配置工具中修改 Endpoint、Model、API Key 等参数。
@@ -77,7 +79,7 @@ PPA 的一次性维护者配置见 [Launchpad PPA 发布配置](docs/launchpad-p
 也可以从 GitHub Releases 下载 Ubuntu 24.04 amd64 包：
 
 ```bash
-sudo apt install ./fcitx5-english-hint_0.10.0_amd64.deb
+sudo apt install ./fcitx5-english-hint_0.11.0_amd64.deb
 fcitx5 -r -d
 ```
 
@@ -122,6 +124,7 @@ cd fcitx5-english-hint
 ```ini
 [General]
 Enabled=True
+VerticalBilingual=False
 CommitEnglishWithAlt=True
 DebounceMs=200
 TimeoutMs=2500
@@ -144,6 +147,28 @@ fcitx5-remote -r
 
 `ApiKey` 可以为空，适合 llama.cpp、vLLM、LiteLLM 等本地 OpenAI-compatible 服务。
 
+## 显示模式
+
+默认 `VerticalBilingual=False`，继续将英文放在独立辅助行。想让中文和英文逐项对应，在 Fcitx5 配置工具 → English Hint → 通用中勾选“竖排中英同行”，或在配置文件 `[General]` 中设置：
+
+```ini
+VerticalBilingual=True
+```
+
+手动修改后执行 `fcitx5-remote -r`。显示示例：
+
+```text
+1. 你好  Hello
+2. 谢谢  Thank you
+3. 再见  Goodbye
+```
+
+- 中文候选和对应英文显示在同一行，插件向 UI 请求竖排布局；具体排版仍由 Fcitx UI/主题决定。
+- 翻译未完成的候选先显示中文，不留空白项、不改变序号；每页仍只翻译最多前 5 项。
+- 普通数字、空格和鼠标选词提交原中文；`Alt+数字` 提交对应候选已显示的英文。
+- 翻页时不沿用旧页英文；翻译异步返回后，只更新当前候选的显示。
+- 取消勾选或设回 `False` 即恢复原显示，无需清空缓存。
+
 ## 快捷键输入英文
 
 输入拼音，等对应英文提示出现后，按 **Alt+数字** 即可输入该序号候选的英文，无需先移动高亮。例如第 2 项是 `提高效率`，英文提示为 `2.Improve efficiency`，按 `Alt+2` 就会直接上屏 `Improve efficiency`；单独按 `2` 仍按 Rime 的方式选中文。
@@ -158,7 +183,7 @@ fcitx5-remote -r
 
 ## 本地模型优化
 
-0.10.0 延续本地模型优化，不增加额外常驻服务：
+0.11.0 延续本地模型优化，不增加额外常驻服务：
 
 - `max_tokens` 默认 **96**：5 条中短句实测可完整返回；模型会按实际完成长度提前停止，不会因为上限提高而固定生成 96 tokens。
 - 默认发送 `reasoning_effort=none`，避免 Qwen 等模型把延迟浪费在 thinking 上。
@@ -237,10 +262,10 @@ LLM 返回过程中，已命中的缓存/词典翻译会先显示，不会等待
 生成文件位于：
 
 ```text
-build-package/fcitx5-english-hint_0.10.0_amd64.deb
+build-package/fcitx5-english-hint_0.11.0_amd64.deb
 ```
 
-GitHub tag `v0.10.0` 会通过 GitHub Actions 在 `ubuntu-24.04` runner 上完成编译/测试、创建 GitHub Release，并构建签名 source package 上传到 Launchpad PPA。
+GitHub tag `v0.11.0` 会通过 GitHub Actions 在 `ubuntu-24.04` runner 上完成编译/测试、创建 GitHub Release，并构建签名 source package 上传到 Launchpad PPA。
 
 本地验证 Launchpad source package：
 
@@ -252,7 +277,7 @@ lintian --fail-on error build-source/*_source.changes
 PPA 使用 Debian source package 版本形如：
 
 ```text
-0.10.0-1~ppa1~ubuntu24.04.1
+0.11.0-1~ppa1~ubuntu24.04.1
 ```
 
 ## 测试
@@ -263,6 +288,7 @@ PPA 使用 Debian source package 版本形如：
 ./build/tests/english-hint-cache-smoke
 ./build/tests/english-hint-aux-formatter-smoke
 ./build/tests/english-hint-english-commit-smoke
+./build/tests/english-hint-inline-candidates-smoke
 ```
 
 LLM 实机测试：

@@ -1,5 +1,6 @@
 [General]
 Enabled=True
+VerticalBilingual=False
 CommitEnglishWithAlt=True
 DebounceMs=200
 TimeoutMs=2500
