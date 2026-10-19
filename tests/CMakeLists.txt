@@ -62,6 +62,19 @@ target_link_libraries(english-hint-inline-candidates-smoke PRIVATE
 add_test(NAME english-hint-inline-candidates-smoke
          COMMAND english-hint-inline-candidates-smoke)
 
+add_executable(english-hint-worker-smoke
+    translation_worker_smoke.cpp
+    ../src/translation_worker.cpp
+    ../src/llm_client.cpp
+    ../src/persistent_cache.cpp
+)
+target_include_directories(english-hint-worker-smoke PRIVATE ../src)
+target_compile_features(english-hint-worker-smoke PRIVATE cxx_std_17)
+target_link_libraries(english-hint-worker-smoke PRIVATE
+    Fcitx5::Core Fcitx5::Config CURL::libcurl Threads::Threads)
+add_test(NAME english-hint-worker-smoke COMMAND english-hint-worker-smoke)
+set_tests_properties(english-hint-worker-smoke PROPERTIES TIMEOUT 20)
+
 option(ENGLISH_HINT_RIME_INTEGRATION "Test with an installed fcitx5-rime addon" OFF)
 if(ENGLISH_HINT_RIME_INTEGRATION)
     add_executable(english-hint-rime-integration
@@ -82,4 +95,9 @@ if(ENGLISH_HINT_RIME_INTEGRATION)
         Fcitx5::Core Fcitx5::Config CURL::libcurl Threads::Threads)
     add_test(NAME english-hint-rime-integration COMMAND english-hint-rime-integration)
     set_tests_properties(english-hint-rime-integration PROPERTIES TIMEOUT 45)
+    foreach(page_size 8 10)
+        add_test(NAME english-hint-rime-page-${page_size}
+                 COMMAND english-hint-rime-integration ${page_size})
+        set_tests_properties(english-hint-rime-page-${page_size} PROPERTIES TIMEOUT 45)
+    endforeach()
 endif()

@@ -5,6 +5,7 @@ CommitEnglishWithAlt=True
 DebounceMs=200
 TimeoutMs=2500
 CacheSize=4096
+# 每页最多翻译 1～10 项；默认 5，设为 10 可覆盖当前页最多 10 个候选。
 MaxBatch=5
 Debug=False
 

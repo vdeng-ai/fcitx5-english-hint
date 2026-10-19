@@ -239,6 +239,7 @@ void EnglishHint::handleInputPanelUpdate(InputContext *inputContext) {
         return;
     }
 
+    // CandidateList::size() is page-local, including a short final page.
     const std::size_t visibleCount = std::min<std::size_t>(
         config_.maxBatch, static_cast<std::size_t>(candidateList->size()));
     std::vector<std::string> missing;

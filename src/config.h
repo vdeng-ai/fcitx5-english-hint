@@ -40,7 +40,7 @@ FCITX_CONFIGURATION(
         IntConstrain(32, 65536)};
     Option<int, IntConstrain> maxBatch{
         this, "MaxBatch", "每次请求最多候选数", 5,
-        IntConstrain(1, 5)};
+        IntConstrain(1, 10)};
     Option<bool> debug{this, "Debug", "输出调试性能指标", false};
 )
 

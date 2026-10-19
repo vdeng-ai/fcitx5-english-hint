@@ -8,6 +8,7 @@
 #include <fcitx/addonmanager.h>
 #include <fcitx/addonfactory.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -71,9 +72,11 @@ void write(const std::filesystem::path &path, const std::string &content) {
 }
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
     using namespace fcitx;
     using namespace fcitx::english_hint;
+    const int pageSize = argc > 1 ? std::stoi(argv[1]) : 5;
+    if (pageSize != 5 && pageSize != 8 && pageSize != 10) { return 1; }
     char pattern[] = "/tmp/english-hint-rime-XXXXXX";
     const char *directory = mkdtemp(pattern);
     if (!directory) { return 1; }
@@ -112,7 +115,7 @@ translator:
   enable_sentence: false
   enable_user_dict: false
 menu:
-  page_size: 5
+  page_size: )" + std::to_string(pageSize) + R"(
 key_binder:
   bindings:
     - {when: paging, accept: Page_Up, send: Page_Up}
@@ -175,9 +178,34 @@ key_binder:
                         settings.general.mutableValue()->verticalBilingual.setValue(vertical);
                         settings.llm.mutableValue()->endpoint.setValue(
                             "http://127.0.0.1:1/v1/chat/completions");
+                        // Keep the default at five, even on a larger Rime page.
+                        RawConfig defaults;
+                        settings.save(defaults);
+                        hint.setConfig(defaults);
+                        ic.reset();
+                        type(ic, instance, "shi");
+                        require(originalCandidates(ic.inputPanel())->size() == pageSize,
+                                "Rime must expose exactly the current page size");
+                        for (int i = 0; i < pageSize; ++i) {
+                            const auto shown = ic.inputPanel().candidateList()->candidate(i).text().toString();
+                            const auto english = "English " + std::to_string(i);
+                            require(vertical ? (shown.find(english) != std::string::npos) == (i < 5)
+                                             : (ic.inputPanel().auxDown().toString().find(english) != std::string::npos) == (i < 5),
+                                    "default MaxBatch must translate only the first five positions");
+                        }
+                        settings.general.mutableValue()->maxBatch.setValue(pageSize);
                         RawConfig raw;
                         settings.save(raw);
                         hint.setConfig(raw);
+                        // Exercise real key events at every newly supported position.
+                        for (int digit = 6; digit <= pageSize; ++digit) {
+                            ic.reset();
+                            ic.committed.clear();
+                            type(ic, instance, "shi");
+                            key(ic, instance, "Alt+" + std::to_string(digit % 10));
+                            require(ic.committed == "English " + std::to_string(digit - 1),
+                                    "Alt+6 through Alt+0 must commit the corresponding English");
+                        }
                         for (const auto *selection : {"2", "mouse", "Alt+2"}) {
                             ic.reset();
                             ic.committed.clear();
@@ -214,8 +242,15 @@ key_binder:
                             } else {
                                 key(ic, instance, "Next");
                             }
-                            require(originalCandidates(ic.inputPanel())->candidate(0).text().toString() == words[5],
+                            require(originalCandidates(ic.inputPanel())->candidate(0).text().toString() == words[pageSize],
                                     "both UI and key paging must reach the second Rime page");
+                            const int remaining = static_cast<int>(words.size()) - pageSize;
+                            require(originalCandidates(ic.inputPanel())->size() == std::min(pageSize, remaining),
+                                    "short pages must use their actual candidate count");
+                            if (remaining < pageSize) {
+                                key(ic, instance, "Alt+" + std::to_string(remaining + 1));
+                                require(ic.committed.empty(), "positions beyond the final page must not commit English");
+                            }
                             if (viaUi) {
                                 ic.inputPanel().candidateList()->toPageable()->prev();
                                 instance.flushUI();
@@ -230,7 +265,7 @@ key_binder:
                                 key(ic, instance, "Next");
                             }
                             key(ic, instance, "Alt+1");
-                            require(ic.committed == "English 5",
+                            require(ic.committed == "English " + std::to_string(pageSize),
                                     "English selection after paging must use the new page");
                         }
                     }

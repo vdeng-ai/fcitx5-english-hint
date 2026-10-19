@@ -39,6 +39,26 @@ int main() {
 
     try {
         EnglishHintFcitxConfig config;
+        require(toRuntimeConfig(config).maxBatch == 5,
+                "existing configurations must retain the default batch of five");
+        for (int count : {1, 5, 8, 9, 10}) {
+            RawConfig batchRaw;
+            batchRaw["General"]["MaxBatch"] = std::to_string(count);
+            EnglishHintFcitxConfig batchConfig;
+            batchConfig.load(batchRaw, true);
+            require(toRuntimeConfig(batchConfig).maxBatch == static_cast<std::size_t>(count),
+                    "all supported batch sizes must load from configuration");
+            RawConfig saved;
+            batchConfig.save(saved);
+            EnglishHintFcitxConfig loaded;
+            loaded.load(saved, true);
+            require(toRuntimeConfig(loaded).maxBatch == static_cast<std::size_t>(count),
+                    "larger batch sizes must survive configuration round-trip");
+        }
+        for (int count : {0, 11}) {
+            require(!config.general.mutableValue()->maxBatch.setValue(count),
+                    "batch sizes outside 1 through 10 must be rejected");
+        }
         require(*config.general->commitEnglishWithAlt,
                 "Alt+number English selection must be enabled by default");
         for (int digit = 1; digit <= 9; ++digit) {
