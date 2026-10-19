@@ -1,3 +1,11 @@
+fcitx5-english-hint (0.12.0-1~ppa1~ubuntu24.04.1) noble; urgency=medium
+
+  * Allow MaxBatch values from 1 to 10 while retaining the default of 5.
+  * Translate actual page-local candidate counts, including short final pages.
+  * Verify larger Rime pages, Alt-number selection and asynchronous caching.
+
+ -- vdeng-ai <8124973+vdeng-ai@users.noreply.github.com>  Mon, 19 Oct 2026 14:15:00 +0800
+
 fcitx5-english-hint (0.11.0-1~ppa1~ubuntu24.04.1) noble; urgency=medium
 
   * Add optional vertical bilingual candidate display; retain auxDown by default.
